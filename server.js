@@ -42,6 +42,23 @@ app.post('/api/marshalls', async (req, res) => {
   }
 });
 
+app.get('/api/marshalls/:uid', async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const doc = await db.collection('marshalls').doc(uid).get();
+
+    if (doc.exists) {
+      res.status(200).json({ exists: true, data: doc.data() });
+    } else {
+      res.status(404).json({ exists: false }); // This is what your frontend is receiving
+    }
+  } catch (err) {
+    console.error('Error getting marshall:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
 app.listen(5000, () => {
   console.log('Server running on http://localhost:5000');
 });
