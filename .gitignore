@@ -1,8 +1,15 @@
-# Node.js
+# Service account key
+serviceAccountKey.json
+
+# Environment variables
+.env
+*.env
+
+# Node.js dependencies
 node_modules/
-npm-debug.log
 
-.vite/
+# Logs
+*.log
 
-# Firebase service account key
-backend/serviceAccountKey.json
+# Temporary files
+*.tmp
