@@ -6,14 +6,14 @@ const SibApiV3Sdk = require('@getbrevo/brevo');
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: 'https://farefare.netlify.app' })); // Update with your Netlify URL
+app.use(cors({ origin: ['https://farefare.netlify.app', 'http://localhost:3000'] }));
 
 // Initialize Firebase Admin SDK with environment variables
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
   project_id: process.env.FIREBASE_PROJECT_ID,
   private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Handle newlines
+  private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
   client_email: process.env.FIREBASE_CLIENT_EMAIL,
   client_id: process.env.FIREBASE_CLIENT_ID,
   auth_uri: process.env.FIREBASE_AUTH_URI,
@@ -23,16 +23,21 @@ const serviceAccount = {
   universe_domain: process.env.FIREBASE_UNIVERSE_DOMAIN
 };
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// Prevent duplicate Firebase app initialization
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
 
 const db = admin.firestore();
 
 // Brevo SMS Setup
 const apiKey = process.env.BREVO_API_KEY;
+if (!apiKey) {
+  console.error('BREVO_API_KEY is not set in environment variables');
+}
 const apiInstance = new SibApiV3Sdk.TransactionalSMSApi();
-
 const apiClient = SibApiV3Sdk.ApiClient.instance;
 apiClient.authentications['api-key'].apiKey = apiKey;
 
@@ -59,7 +64,7 @@ app.post('/api/marshalls', async (req, res) => {
     res.status(201).json({ message: 'Marshall created successfully' });
   } catch (error) {
     console.error('Error creating marshall:', error);
-    res.status(500).json({ error: 'Failed to create marshall' });
+    res.status(500).json({ error: 'Failed to create marshall', details: error.message });
   }
 });
 
@@ -75,7 +80,7 @@ app.get('/api/marshalls/:uid', async (req, res) => {
     }
   } catch (err) {
     console.error('Error getting marshall:', err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
@@ -87,9 +92,13 @@ app.post('/api/send-trip-sms', async (req, res) => {
     return res.status(400).json({ error: 'Missing phone number or trip details' });
   }
 
+  if (!nextOfKinPhone.match(/^\+\d{10,15}$/)) {
+    return res.status(400).json({ error: 'Invalid phone number format. Use international format (e.g., +1234567890)' });
+  }
+
   const sendSms = new SibApiV3Sdk.SendTransacSms();
-  sendSms.sender = 'Farfare'; // Replace with your registered sender ID
-  sendSms.recipient = nextOfKinPhone; // e.g., "+1234567890"
+  sendSms.sender = 'Farfare'; // Ensure this is registered in Brevo
+  sendSms.recipient = nextOfKinPhone;
   sendSms.content = `Trip Details: ${tripDetails}. Contact support if needed.`;
   sendSms.type = 'transactional';
 
@@ -98,9 +107,14 @@ app.post('/api/send-trip-sms', async (req, res) => {
     res.status(200).json({ message: 'SMS sent successfully', data: response });
   } catch (error) {
     console.error('Error sending SMS:', error);
-    res.status(500).json({ error: 'Failed to send SMS' });
+    res.status(500).json({ error: 'Failed to send SMS', details: error.message });
   }
 });
 
-// Vercel requires a handler export for serverless functions
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error', details: err.message });
+});
+
 module.exports = app;
